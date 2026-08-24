@@ -1,0 +1,308 @@
+// ==============================================================================
+// OpsPilot Database Schema (PostgreSQL + Prisma ORM)
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ------------------------------------------------------------------------------
+// 1. User & Authentication
+// ------------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(EMPLOYEE)
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  createdTickets     Ticket[]           @relation("TicketCreatedBy")
+  assignedTickets    Ticket[]           @relation("TicketAssignedTo")
+  comments           TicketComment[]
+  assignedByHistory  TicketAssignment[] @relation("AssignmentAssignedBy")
+  assignedToHistory  TicketAssignment[] @relation("AssignmentAssignedTo")
+  activityLogs       ActivityLog[]
+  tasks              Task[]
+  resetTokens        PasswordResetToken[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ------------------------------------------------------------------------------
+// 2. Customer Management
+// ------------------------------------------------------------------------------
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  LEAD
+}
+
+model Customer {
+  id        String         @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  company   String?
+  status    CustomerStatus @default(ACTIVE)
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  tickets   Ticket[]
+
+  @@index([status, deletedAt])
+  @@index([email])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+// ------------------------------------------------------------------------------
+// 3. Product & Category Management
+// ------------------------------------------------------------------------------
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  products    Product[]
+
+  @@map("categories")
+}
+
+enum ProductStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  sku         String        @unique
+  description String?
+  categoryId  String?
+  category    Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  price       Float
+  stock       Int           @default(0)
+  status      ProductStatus @default(IN_STOCK)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  @@index([categoryId, deletedAt])
+  @@index([status, deletedAt])
+  @@index([sku])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("products")
+}
+
+// ------------------------------------------------------------------------------
+// 4. Support Ticket System & AI Triaging
+// ------------------------------------------------------------------------------
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  BILLING
+  TECHNICAL
+  DELIVERY
+  ACCOUNT
+  GENERAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+model Ticket {
+  id               String         @id @default(cuid())
+  ticketNumber     String         @unique
+  customerId       String
+  customer         Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdByUserId  String
+  createdByUser    User           @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
+  assignedToUserId String?
+  assignedToUser   User?          @relation("TicketAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  subject          String
+  description      String
+  priority         TicketPriority @default(MEDIUM)
+  category         TicketCategory @default(GENERAL)
+  status           TicketStatus   @default(OPEN)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  resolvedAt       DateTime?
+
+  // Relations
+  comments         TicketComment[]
+  assignments      TicketAssignment[]
+  aiAnalysis       AIAnalysis?
+
+  @@index([status, priority])
+  @@index([customerId])
+  @@index([assignedToUserId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_comments")
+}
+
+model TicketAssignment {
+  id               String   @id @default(cuid())
+  ticketId         String
+  ticket           Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  assignedByUserId String
+  assignedByUser   User     @relation("AssignmentAssignedBy", fields: [assignedByUserId], references: [id])
+  assignedToUserId String
+  assignedToUser   User     @relation("AssignmentAssignedTo", fields: [assignedToUserId], references: [id])
+  note             String?
+  createdAt        DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_assignments")
+}
+
+// ------------------------------------------------------------------------------
+// 5. AI Structured Analysis
+// ------------------------------------------------------------------------------
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+model AIAnalysis {
+  id                String         @id @default(cuid())
+  ticketId          String         @unique
+  ticket            Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  provider          String         // gemini, openai, ollama, fallback
+  model             String
+  priority          TicketPriority
+  category          TicketCategory
+  sentiment         Sentiment
+  summary           String
+  suggestedResponse String
+  nextAction        String
+  rawTokens         Int?
+  processingTimeMs  Int?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([sentiment])
+  @@index([priority])
+  @@map("ai_analyses")
+}
+
+// ------------------------------------------------------------------------------
+// 6. Security Audit & Activity Logging
+// ------------------------------------------------------------------------------
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // e.g. "AUTH_LOGIN", "CREATE_CUSTOMER", "AI_ANALYSIS", "UPDATE_TICKET"
+  entityType String   // "CUSTOMER", "PRODUCT", "TICKET", "USER", "AUTH"
+  entityId   String?
+  details    String?  // JSON stringified payload
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// ------------------------------------------------------------------------------
+// 7. Operations Tasks
+// ------------------------------------------------------------------------------
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Task {
+  id               String     @id @default(cuid())
+  title            String
+  description      String?
+  status           TaskStatus @default(PENDING)
+  dueDate          DateTime?
+  assignedToUserId String?
+  assignedToUser   User?      @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([status])
+  @@index([assignedToUserId])
+  @@map("tasks")
+}

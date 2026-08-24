@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # PostgreSQL Database Service
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: opspilot_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: opspilot
+      POSTGRES_PASSWORD: opspilot_secret
+      POSTGRES_DB: opspilot
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opspilot -d opspilot']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opspilot_net
+
+  # ==========================================
+  # Redis Cache & BullMQ Message Broker
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: opspilot_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opspilot_net
+
+  # ==========================================
+  # Next.js Full-Stack Application (Web & API)
+  # ==========================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: opspilot_web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://opspilot:opspilot_secret@postgres:5432/opspilot?schema=public
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=super_secret_production_jwt_key_opspilot_2026_dev_secure_key_32_chars
+      - AI_PROVIDER=${AI_PROVIDER:-fallback}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - opspilot_net
+
+  # ==========================================
+  # BullMQ Async AI & Notification Worker
+  # ==========================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: opspilot_worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://opspilot:opspilot_secret@postgres:5432/opspilot?schema=public
+      - REDIS_URL=redis://redis:6379
+      - AI_PROVIDER=${AI_PROVIDER:-fallback}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - opspilot_net
+
+  # ==========================================
+  # Optional: Ollama Local AI Inference Server
+  # ==========================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: opspilot_ollama
+    restart: unless-stopped
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - opspilot_net
+    profiles:
+      - local-ai
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:
+
+networks:
+  opspilot_net:
+    driver: bridge
