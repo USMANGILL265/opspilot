@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getAuthenticatedUser } from '@/lib/auth';
+import { getAuthenticatedUser, hasRequiredRole } from '@/lib/auth';
 import { CreateProductSchema, ProductQuerySchema } from '@/lib/validation';
 import { cacheService } from '@/lib/cache';
 import { logRequest } from '@/lib/logger';
@@ -83,6 +83,10 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!hasRequiredRole(user.role, ['ADMIN', 'MANAGER'])) {
+    return NextResponse.json({ success: false, error: 'Forbidden: insufficient role' }, { status: 403 });
   }
 
   try {

@@ -4,11 +4,21 @@ import { getAuthenticatedUser } from '@/lib/auth';
 import { aiService } from '@/lib/ai/ai-service';
 import { cacheService } from '@/lib/cache';
 import { logRequest } from '@/lib/logger';
+import { rateLimit, getClientKey } from '@/lib/rate-limit';
+import { initQueue } from '@/lib/queue';
 
 export async function POST(
   request: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
+  const rate = rateLimit(getClientKey(request, 'ai-analyze'), 10, 60000);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'Too many AI analysis requests. Please try again later.' },
+      { status: 429 }
+    );
+  }
+
   const params = await props.params;
   const start = Date.now();
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
@@ -26,6 +36,28 @@ export async function POST(
 
     if (!ticket) {
       return NextResponse.json({ success: false, error: 'Ticket not found' }, { status: 404 });
+    }
+
+    const queue = initQueue();
+    if (queue) {
+      try {
+        await queue.add('analyze-ticket', {
+          ticketId: ticket.id,
+          triggerUserId: user.userId,
+        });
+
+        logRequest({ requestId, method: 'POST', path: `/api/tickets/${params.id}/analyze`, statusCode: 202, userId: user.userId, durationMs: Date.now() - start });
+        return NextResponse.json(
+          {
+            success: true,
+            status: 'QUEUED',
+            message: 'Analysis queued. Result will be available shortly.',
+          },
+          { status: 202 }
+        );
+      } catch {
+        // Fall through to synchronous processing when queue submission fails.
+      }
     }
 
     // Execute AI Analysis via abstraction layer

@@ -47,6 +47,15 @@ jobs:
       - name: Type Check
         run: pnpm typecheck
 
+      - name: Run Linter
+        run: pnpm lint
+
+      - name: Format Check
+        run: pnpm format:check
+
+      - name: Dependency Security Audit
+        run: pnpm audit --audit-level=high || true
+
   test-unit:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest

@@ -141,3 +141,33 @@ export const SearchQuerySchema = z.object({
   type: z.enum(['all', 'customers', 'products', 'tickets']).default('all'),
   aiAssisted: z.coerce.boolean().default(false),
 });
+
+// ==========================================
+// Task Schemas
+// ==========================================
+export const CreateTaskSchema = z.object({
+  title: z.string().min(2, 'Title must be at least 2 characters').max(200),
+  description: z.string().max(3000).optional().nullable(),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).default('PENDING'),
+  dueDate: z.string().optional().nullable(),
+  assignedToUserId: z.string().optional().nullable(),
+});
+
+export const UpdateTaskSchema = z.object({
+  title: z.string().min(2).max(200).optional(),
+  description: z.string().max(3000).optional().nullable(),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
+  dueDate: z.string().optional().nullable(),
+  assignedToUserId: z.string().optional().nullable(),
+});
+
+export const TaskQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(10),
+  search: z.string().optional(),
+  status: z.enum(['PENDING', 'IN_PROGRESS', 'COMPLETED']).optional(),
+  assignedToUserId: z.string().optional(),
+  sortBy: z.enum(['createdAt', 'updatedAt', 'title', 'status', 'dueDate']).default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+

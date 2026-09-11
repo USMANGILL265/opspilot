@@ -3,8 +3,17 @@ import { prisma } from '@/lib/db';
 import { comparePassword, generateToken, COOKIE_NAME } from '@/lib/auth';
 import { LoginSchema } from '@/lib/validation';
 import { logRequest } from '@/lib/logger';
+import { rateLimit, getClientKey } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const rate = rateLimit(getClientKey(request, 'login'), 5, 60000);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'Too many login attempts. Please try again later.' },
+      { status: 429 }
+    );
+  }
+
   const start = Date.now();
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 

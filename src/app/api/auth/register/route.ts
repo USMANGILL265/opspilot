@@ -4,8 +4,17 @@ import { hashPassword, generateToken, COOKIE_NAME } from '@/lib/auth';
 import { RegisterSchema } from '@/lib/validation';
 import { Role } from '@prisma/client';
 import { logRequest } from '@/lib/logger';
+import { rateLimit, getClientKey } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const rate = rateLimit(getClientKey(request, 'register'), 3, 60000);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { success: false, error: 'Too many registration attempts. Please try again later.' },
+      { status: 429 }
+    );
+  }
+
   const start = Date.now();
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 

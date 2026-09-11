@@ -114,6 +114,23 @@ async function main() {
 
   console.log('✅ Created 4 sample enterprise customers');
 
+  const generatedCustomers = Array.from({ length: 100 }, (_, index) => {
+    const customerNumber = index + 1;
+    const statuses: CustomerStatus[] = [CustomerStatus.ACTIVE, CustomerStatus.INACTIVE, CustomerStatus.LEAD];
+
+    return {
+      name: `Sample Customer ${customerNumber}`,
+      email: `customer${customerNumber}@sample.opspilot.com`,
+      phone: `+1 (555) 700-${String(customerNumber).padStart(4, '0')}`,
+      company: `Sample Company ${customerNumber}`,
+      status: statuses[index % statuses.length],
+      notes: `Generated demo customer record ${customerNumber}.`,
+    };
+  });
+  await prisma.customer.createMany({ data: generatedCustomers });
+  const customers = await prisma.customer.findMany({ select: { id: true } });
+  console.log(`✅ Created ${customers.length} total customers`);
+
   // 5. Create Products
   const products = await Promise.all([
     prisma.product.create({
@@ -163,6 +180,28 @@ async function main() {
   ]);
 
   console.log(`✅ Created ${products.length} sample products`);
+
+  const generatedProducts = Array.from({ length: 100 }, (_, index) => {
+    const productNumber = index + 1;
+    const statuses: ProductStatus[] = [
+      ProductStatus.IN_STOCK,
+      ProductStatus.LOW_STOCK,
+      ProductStatus.OUT_OF_STOCK,
+      ProductStatus.DISCONTINUED,
+    ];
+
+    return {
+      name: `Sample Operations Product ${productNumber}`,
+      sku: `OPS-SAMPLE-${String(productNumber).padStart(4, '0')}`,
+      description: `Generated demo product record ${productNumber} for catalog testing.`,
+      categoryId: categories[index % categories.length].id,
+      price: Number((49.99 + (index % 80) * 25.5).toFixed(2)),
+      stock: (index * 7) % 250,
+      status: statuses[index % statuses.length],
+    };
+  });
+  await prisma.product.createMany({ data: generatedProducts });
+  console.log(`✅ Created ${products.length + generatedProducts.length} total products`);
 
   // 6. Create Support Tickets with AI Analysis & Comments
   const ticket1 = await prisma.ticket.create({
@@ -248,6 +287,48 @@ async function main() {
   });
 
   console.log('✅ Created 3 support tickets with AI analyses and comments');
+
+  const priorities: TicketPriority[] = [
+    TicketPriority.LOW,
+    TicketPriority.MEDIUM,
+    TicketPriority.HIGH,
+    TicketPriority.URGENT,
+  ];
+  const ticketCategories: TicketCategory[] = [
+    TicketCategory.BILLING,
+    TicketCategory.TECHNICAL,
+    TicketCategory.DELIVERY,
+    TicketCategory.ACCOUNT,
+    TicketCategory.GENERAL,
+  ];
+  const ticketStatuses: TicketStatus[] = [
+    TicketStatus.OPEN,
+    TicketStatus.IN_PROGRESS,
+    TicketStatus.WAITING,
+    TicketStatus.RESOLVED,
+    TicketStatus.CLOSED,
+  ];
+  const supportUsers = [admin, manager, employee];
+  const generatedTickets = Array.from({ length: 100 }, (_, index) => {
+    const ticketNumber = index + 1;
+    const status = ticketStatuses[index % ticketStatuses.length];
+
+    return {
+      ticketNumber: `OP-SAMPLE-${String(ticketNumber).padStart(4, '0')}`,
+      customerId: customers[index % customers.length].id,
+      createdByUserId: supportUsers[index % supportUsers.length].id,
+      assignedToUserId: supportUsers[(index + 1) % supportUsers.length].id,
+      subject: `Sample support request ${ticketNumber}`,
+      description: `Generated demo ticket ${ticketNumber} for ${ticketCategories[index % ticketCategories.length].toLowerCase()} workflow testing.`,
+      priority: priorities[index % priorities.length],
+      category: ticketCategories[index % ticketCategories.length],
+      status,
+      resolvedAt: status === TicketStatus.RESOLVED || status === TicketStatus.CLOSED ? new Date() : null,
+      createdAt: new Date(Date.now() - index * 3600000),
+    };
+  });
+  await prisma.ticket.createMany({ data: generatedTickets });
+  console.log(`✅ Created ${generatedTickets.length + 3} total support tickets`);
 
   // 7. Create Tasks
   await prisma.task.createMany({

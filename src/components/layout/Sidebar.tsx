@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Shield,
   FileCode2,
+  CheckSquare,
 } from 'lucide-react';
 import { AuthUser } from '@/types';
 
@@ -27,6 +28,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Tasks', href: '/tasks', icon: CheckSquare },
     { name: 'Customers', href: '/customers', icon: Users },
     { name: 'Products', href: '/products', icon: Package },
     { name: 'Support Tickets', href: '/tickets', icon: LifeBuoy, hasAiBadge: true },
